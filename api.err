@@ -1,0 +1,17 @@
+D:\TCM\node_modules\pino\lib\transport.js:160
+      throw new Error(`unable to determine transport target for "${origin}"`)
+            ^
+
+Error: unable to determine transport target for "pino-pretty"
+    at fixTarget (D:\TCM\node_modules\pino\lib\transport.js:160:13)
+    at transport (D:\TCM\node_modules\pino\lib\transport.js:130:22)
+    at normalizeArgs (D:\TCM\node_modules\pino\lib\tools.js:358:16)
+    at pino (D:\TCM\node_modules\pino\pino.js:91:28)
+    at pino (D:\TCM\packages\api\src\lib\logger.ts:7:23)
+    at Object.<anonymous> (D:\TCM\packages\api\src\lib\logger.ts:21:2)
+    at Module._compile (node:internal/modules/cjs/loader:1688:14)
+    at Object.transformer (D:\TCM\node_modules\tsx\dist\register-BOkp8V6j.cjs:9:3176)
+    at Module.load (node:internal/modules/cjs/loader:1423:32)
+    at Function._load (node:internal/modules/cjs/loader:1246:12)
+
+Node.js v22.18.0

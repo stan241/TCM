@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+
+# Environment files — NEVER commit secrets
+.env
+.env.local
+.env.production
+.env.staging
+
+# Turbo
+.turbo/
+
+# Database
+*.sql.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+
+# Keys & certs — NEVER commit
+*.pem
+*.key
+*.crt
+*.p12
+certs/
