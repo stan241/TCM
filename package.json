@@ -12,8 +12,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "db:migrate": "turbo run db:migrate --filter=@tcm/db",
-    "db:seed": "turbo run db:seed --filter=@tcm/db"
+    "db:migrate": "node packages/db/scripts/migrate.js"
   },
   "overrides": {
     "next": "15.3.3",
@@ -29,9 +28,5 @@
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
-  },
-  "dependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
   }
 }
