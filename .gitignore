@@ -1,47 +1,58 @@
-# Dependencies
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
 .pnp
 .pnp.js
 
-# Build outputs
+# ── Build outputs ─────────────────────────────────────────────────────────────
 .next/
 dist/
 build/
 out/
+*.tsbuildinfo
 
-# Environment files — NEVER commit secrets
+# ── Environment files — NEVER commit secrets ──────────────────────────────────
 .env
 .env.local
 .env.production
 .env.staging
+.env.*.local
 
-# Turbo
+# ── Turbo ─────────────────────────────────────────────────────────────────────
 .turbo/
 
-# Database
+# ── Database ──────────────────────────────────────────────────────────────────
 *.sql.bak
 
-# OS
+# ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDE
+# ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# Logs
+# ── Logs & temp output ────────────────────────────────────────────────────────
 *.log
+*.err
 npm-debug.log*
+dev-out.txt
+dev-err.txt
 
-# Hardhat
+# ── Hardhat / Solidity ────────────────────────────────────────────────────────
 artifacts/
 cache/
 typechain-types/
 
-# Keys & certs — NEVER commit
+# ── Keys, certs, secrets — NEVER commit ──────────────────────────────────────
 *.pem
 *.key
 *.crt
 *.p12
 certs/
+
+# ── Claude / AI tooling ───────────────────────────────────────────────────────
+.claude/
+*.output
