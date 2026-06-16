@@ -7,13 +7,18 @@ describe('TCTCredential', () => {
   let deployer: any, issuer: any, holder: any, holder2: any, attacker: any
   let tcmRevoker: any, tcnRevoker: any
 
-  // bytes8 = 16 hex chars after 0x
-  const NETWORK_ID    = ('0x' + Buffer.from('polygon ').toString('hex')) as `0x${string}`
-  const BINDING1      = ethers.keccak256(ethers.toUtf8Bytes('identity-1'))
-  const BINDING2      = ethers.keccak256(ethers.toUtf8Bytes('identity-2'))
-  // bytes4 = 8 hex chars after 0x
-  const JURISDICTION  = ('0x' + Buffer.from('US  ').toString('hex')) as `0x${string}`
-  const AUDIT_HASH    = ethers.keccak256(ethers.toUtf8Bytes('audit-root'))
+  // bytes8: 'polygon ' padded to 8 bytes
+  const NETWORK_ID   = ('0x' + Buffer.from('polygon ').toString('hex')) as `0x${string}`
+  const BINDING1     = ethers.keccak256(ethers.toUtf8Bytes('identity-1'))
+  const BINDING2     = ethers.keccak256(ethers.toUtf8Bytes('identity-2'))
+  // bytes4: 'US  ' = 4 bytes
+  const JURISDICTION = ('0x' + Buffer.from('US  ').toString('hex')) as `0x${string}`
+  const AUDIT_HASH   = ethers.keccak256(ethers.toUtf8Bytes('audit-root'))
+
+  // Helper: returns [core, timestamps]
+  async function getCred(tokenId: bigint) {
+    return credential.credentials(tokenId)
+  }
 
   async function mint(signer: any, holderAddr: string, binding: string) {
     return credential.connect(signer).mintAndActivate(
@@ -49,9 +54,9 @@ describe('TCTCredential', () => {
   describe('mintAndActivate', () => {
     it('mints at ACTIVE (Rev 4 — no Pending on-chain)', async () => {
       await mint(issuer, holder.address, BINDING1)
-      const c = await credential.credentials(1n)
-      expect(c.status).to.equal(0)           // Status.ACTIVE
-      expect(c.complianceStatus).to.equal(0) // ComplianceStatus.VERIFIED
+      const [core] = await getCred(1n)
+      expect(core.status).to.equal(0)           // Status.ACTIVE
+      expect(core.complianceStatus).to.equal(0) // ComplianceStatus.VERIFIED
     })
 
     it('emits CredentialMinted and CredentialActivated', async () => {
@@ -62,9 +67,9 @@ describe('TCTCredential', () => {
 
     it('issuedAt == activatedAt (single-op model)', async () => {
       await mint(issuer, holder.address, BINDING1)
-      const c = await credential.credentials(1n)
-      expect(c.issuedAt).to.equal(c.activatedAt)
-      expect(c.issuedAt).to.be.greaterThan(0n)
+      const [, stamps] = await getCred(1n)
+      expect(stamps.issuedAt).to.equal(stamps.activatedAt)
+      expect(stamps.issuedAt).to.be.greaterThan(0n)
     })
 
     it('mints ERC-1155 balance = 1', async () => {
@@ -140,12 +145,14 @@ describe('TCTCredential', () => {
 
     it('TCM revoker: ACTIVE -> SUSPENDED', async () => {
       await credential.connect(tcmRevoker).suspend(1n)
-      expect((await credential.credentials(1n)).status).to.equal(1)
+      const [core] = await getCred(1n)
+      expect(core.status).to.equal(1)
     })
 
     it('TCN revoker: ACTIVE -> SUSPENDED', async () => {
       await credential.connect(tcnRevoker).suspend(1n)
-      expect((await credential.credentials(1n)).status).to.equal(1)
+      const [core] = await getCred(1n)
+      expect(core.status).to.equal(1)
     })
 
     it('emits CredentialSuspended', async () => {
@@ -161,7 +168,8 @@ describe('TCTCredential', () => {
     it('SUSPENDED -> ACTIVE via unsuspend', async () => {
       await credential.connect(tcmRevoker).suspend(1n)
       await credential.connect(tcmRevoker).unsuspend(1n)
-      expect((await credential.credentials(1n)).status).to.equal(0)
+      const [core] = await getCred(1n)
+      expect(core.status).to.equal(0)
     })
 
     it('attacker cannot suspend', async () => {
@@ -175,13 +183,15 @@ describe('TCTCredential', () => {
 
     it('ACTIVE -> REVOKED', async () => {
       await credential.connect(tcmRevoker).revoke(1n)
-      expect((await credential.credentials(1n)).status).to.equal(2)
+      const [core] = await getCred(1n)
+      expect(core.status).to.equal(2)
     })
 
     it('SUSPENDED -> REVOKED', async () => {
       await credential.connect(tcmRevoker).suspend(1n)
       await credential.connect(tcmRevoker).revoke(1n)
-      expect((await credential.credentials(1n)).status).to.equal(2)
+      const [core] = await getCred(1n)
+      expect(core.status).to.equal(2)
     })
 
     it('token NOT burned — balance stays 1 (audit continuity)', async () => {
@@ -211,7 +221,8 @@ describe('TCTCredential', () => {
 
     it('ACTIVE -> RETIRED', async () => {
       await credential.connect(issuer).retire(1n)
-      expect((await credential.credentials(1n)).status).to.equal(4)
+      const [core] = await getCred(1n)
+      expect(core.status).to.equal(4)
     })
 
     it('emits CredentialRetired', async () => {

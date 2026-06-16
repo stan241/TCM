@@ -16,9 +16,9 @@ pragma solidity ^0.8.24;
  * Rev 4: Mint fires at Active, not at Pending.
  * No on-chain token exists until KYC verified (compliance_status = VERIFIED).
  *
- * ⚠ TODO: TCM-TOKEN-STATE-005 production deployment BLOCKED until
+ * TODo: TCM-TOKEN-STATE-005 production deployment BLOCKED until
  *   Legal/Compliance issues written patent consistency confirmation.
- *   Stan reviews first as patent-alignment owner. API Policy §8.1 non-waivable.
+ *   Stan reviews first as patent-alignment owner. API Policy 8.1 non-waivable.
  */
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
@@ -37,36 +37,49 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
     // ─── CREDENTIAL CLASS ──────────────────────────────────────────────────────
     uint256 public constant CREDENTIAL_CLASS_V1 = 0x0001;
 
-    // ─── STATUS ENUM ───────────────────────────────────────────────────────────
-    // Note: PENDING is off-chain only — no on-chain representation
+    // ─── ENUMS ─────────────────────────────────────────────────────────────────
+    // PENDING is off-chain only — no on-chain representation
     enum Status { ACTIVE, SUSPENDED, REVOKED, EXPIRED, RETIRED }
-
-    // ─── COMPLIANCE STATUS ─────────────────────────────────────────────────────
     enum ComplianceStatus { VERIFIED, PENDING, FAILED, RESTRICTED }
 
     // ─── CREDENTIAL RECORD ─────────────────────────────────────────────────────
-    struct Credential {
-        uint256 tokenId;           // Assigned at mint (Active state)
-        bytes8  networkId;         // REQUIRED from first write
-        bytes32 identityBinding;   // SHA-256(canonical_identity_record + salt). Never PII.
+    // Split into two structs to stay within Yul 16-slot stack limit on the
+    // public getter. The auto-generated getter for a 15-field struct overflows.
+    struct CredentialCore {
+        uint256 tokenId;
+        bytes8  networkId;
+        bytes32 identityBinding;
         Status  status;
         ComplianceStatus complianceStatus;
         bytes4  jurisdictionCode;
         uint32  claimsVersion;
-        // Seven timestamps (0 = not set)
-        uint64  issuedAt;          // Set at mint (= activatedAt in single-op model)
-        uint64  activatedAt;       // Set at mint (= issuedAt in single-op model)
-        uint64  updatedAt;
-        uint64  suspendedAt;
-        uint64  revokedAt;
-        uint64  expiredAt;
-        uint64  retiredAt;
-        bytes32 auditRootHash;     // SHA-256(canonical record + prior hash). Refreshed every state change.
+        bytes32 auditRootHash;
     }
 
-    mapping(uint256 => Credential) public credentials;
-    mapping(bytes32 => uint256)    public bindingToTokenId; // identity_binding → token_id
+    struct CredentialTimestamps {
+        uint64 issuedAt;
+        uint64 activatedAt;
+        uint64 updatedAt;
+        uint64 suspendedAt;
+        uint64 revokedAt;
+        uint64 expiredAt;
+        uint64 retiredAt;
+    }
+
+    struct Credential {
+        CredentialCore       core;
+        CredentialTimestamps ts;
+    }
+
+    mapping(uint256 => Credential) private _credentials;
+    mapping(bytes32 => uint256)    public  bindingToTokenId;
     uint256 private _nextTokenId;
+
+    // ─── PUBLIC GETTERS (split to avoid Yul stack overflow) ───────────────────
+    function credentials(uint256 tokenId) external view returns (CredentialCore memory, CredentialTimestamps memory) {
+        Credential storage c = _credentials[tokenId];
+        return (c.core, c.ts);
+    }
 
     // ─── EVENTS ────────────────────────────────────────────────────────────────
     event CredentialMinted(uint256 indexed tokenId, address indexed holder, bytes32 identityBinding);
@@ -83,12 +96,6 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
     }
 
     // ─── MINT + ACTIVATE (single operation — Rev 4) ────────────────────────────
-    /**
-     * Mint and activate credential in a single operation.
-     * Rev 4: Mint fires at Active, not at Pending.
-     * compliance_status must be VERIFIED before this is called.
-     * Batch limit: max 50 tokens per tx (gas-safety ceiling — Doc6 §VI).
-     */
     function mintAndActivate(
         address holder,
         bytes8  networkId,
@@ -100,25 +107,22 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
         require(bindingToTokenId[identityBinding] == 0, "TCT: identity already bound");
 
         tokenId = ++_nextTokenId;
-        uint64 ts = uint64(block.timestamp);
+        uint64 now_ = uint64(block.timestamp);
 
-        credentials[tokenId] = Credential({
-            tokenId:          tokenId,
-            networkId:        networkId,
-            identityBinding:  identityBinding,
-            status:           Status.ACTIVE,
-            complianceStatus: ComplianceStatus.VERIFIED,
-            jurisdictionCode: jurisdictionCode,
-            claimsVersion:    claimsVersion,
-            issuedAt:         ts,      // same as activatedAt in single-op model
-            activatedAt:      ts,
-            updatedAt:        ts,
-            suspendedAt:      0,
-            revokedAt:        0,
-            expiredAt:        0,
-            retiredAt:        0,
-            auditRootHash:    auditRootHash
-        });
+        CredentialCore storage core = _credentials[tokenId].core;
+        core.tokenId          = tokenId;
+        core.networkId        = networkId;
+        core.identityBinding  = identityBinding;
+        core.status           = Status.ACTIVE;
+        core.complianceStatus = ComplianceStatus.VERIFIED;
+        core.jurisdictionCode = jurisdictionCode;
+        core.claimsVersion    = claimsVersion;
+        core.auditRootHash    = auditRootHash;
+
+        CredentialTimestamps storage stamps = _credentials[tokenId].ts;
+        stamps.issuedAt    = now_;
+        stamps.activatedAt = now_;
+        stamps.updatedAt   = now_;
 
         bindingToTokenId[identityBinding] = tokenId;
         _mint(holder, tokenId, 1, "");
@@ -133,11 +137,11 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
             hasRole(REVOCATION_ROLE_TCM, msg.sender) || hasRole(REVOCATION_ROLE_TCN, msg.sender),
             "TCT: missing revocation role"
         );
-        Credential storage c = credentials[tokenId];
-        require(c.status == Status.ACTIVE, "TCT: can only suspend ACTIVE credential");
-        c.status      = Status.SUSPENDED;
-        c.suspendedAt = uint64(block.timestamp);
-        c.updatedAt   = uint64(block.timestamp);
+        Credential storage c = _credentials[tokenId];
+        require(c.core.status == Status.ACTIVE, "TCT: can only suspend ACTIVE credential");
+        c.core.status   = Status.SUSPENDED;
+        c.ts.suspendedAt = uint64(block.timestamp);
+        c.ts.updatedAt   = uint64(block.timestamp);
         _refreshAuditHash(c);
         emit CredentialSuspended(tokenId);
     }
@@ -147,10 +151,10 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
             hasRole(REVOCATION_ROLE_TCM, msg.sender) || hasRole(REVOCATION_ROLE_TCN, msg.sender),
             "TCT: missing revocation role"
         );
-        Credential storage c = credentials[tokenId];
-        require(c.status == Status.SUSPENDED, "TCT: can only unsuspend SUSPENDED credential");
-        c.status    = Status.ACTIVE;
-        c.updatedAt = uint64(block.timestamp);
+        Credential storage c = _credentials[tokenId];
+        require(c.core.status == Status.SUSPENDED, "TCT: can only unsuspend SUSPENDED credential");
+        c.core.status = Status.ACTIVE;
+        c.ts.updatedAt = uint64(block.timestamp);
         _refreshAuditHash(c);
         emit CredentialUnsuspended(tokenId);
     }
@@ -160,11 +164,11 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
             hasRole(REVOCATION_ROLE_TCM, msg.sender) || hasRole(REVOCATION_ROLE_TCN, msg.sender),
             "TCT: missing revocation role"
         );
-        Credential storage c = credentials[tokenId];
-        require(c.status != Status.REVOKED, "TCT: already REVOKED");
-        c.status    = Status.REVOKED;
-        c.revokedAt = uint64(block.timestamp);
-        c.updatedAt = uint64(block.timestamp);
+        Credential storage c = _credentials[tokenId];
+        require(c.core.status != Status.REVOKED, "TCT: already REVOKED");
+        c.core.status = Status.REVOKED;
+        c.ts.revokedAt = uint64(block.timestamp);
+        c.ts.updatedAt = uint64(block.timestamp);
         _refreshAuditHash(c);
         emit CredentialRevoked(tokenId);
         // Token NOT burned — audit continuity (Doc6 §II)
@@ -175,22 +179,16 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
             hasRole(ISSUER_ROLE, msg.sender) || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "TCT: missing issuer role"
         );
-        Credential storage c = credentials[tokenId];
-        require(c.status == Status.ACTIVE, "TCT: can only retire ACTIVE credential");
-        c.status    = Status.RETIRED;
-        c.retiredAt = uint64(block.timestamp);
-        c.updatedAt = uint64(block.timestamp);
+        Credential storage c = _credentials[tokenId];
+        require(c.core.status == Status.ACTIVE, "TCT: can only retire ACTIVE credential");
+        c.core.status = Status.RETIRED;
+        c.ts.retiredAt = uint64(block.timestamp);
+        c.ts.updatedAt = uint64(block.timestamp);
         _refreshAuditHash(c);
         emit CredentialRetired(tokenId);
     }
 
-    // ─── ERC-1155 TRANSFER OVERRIDE — SOULBOUND ────────────────────────────────
-    /**
-     * Transfer hooks overridden to revert all transfers.
-     * ERC-5192 soulbound: identity-bound, non-transferable.
-     * Fuzz test requirement: 1,000 random addresses, zero successful transfers.
-     * Doc5 §V, Doc3 §III.
-     */
+    // ─── ERC-1155 TRANSFER OVERRIDE — SOULBOUND ───────────────────────────────
     function safeTransferFrom(address, address, uint256, uint256, bytes memory)
         public pure override { revert("TCT: soulbound - transfers disabled"); }
 
@@ -200,17 +198,11 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
     function setApprovalForAll(address, bool)
         public pure override { revert("TCT: soulbound - approvals disabled"); }
 
-    // ─── ERC-4337 / EIP-1271 COMPATIBILITY ────────────────────────────────────
-    /**
-     * identity_binding is wallet-agnostic — does not embed wallet type.
-     * EIP-1271 isValidSignature accepted for smart contract wallets.
-     * Wallet-binding check in off-chain service (not enforced here).
-     */
-
     // ─── INTERNAL ──────────────────────────────────────────────────────────────
     function _refreshAuditHash(Credential storage c) internal {
-        // Simplified — production: SHA-256(canonical_credential_record + prior_hash)
-        c.auditRootHash = keccak256(abi.encode(c.tokenId, c.status, c.updatedAt, c.auditRootHash));
+        c.core.auditRootHash = keccak256(
+            abi.encode(c.core.tokenId, c.core.status, c.ts.updatedAt, c.core.auditRootHash)
+        );
     }
 
     function supportsInterface(bytes4 interfaceId)
