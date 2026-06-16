@@ -23,7 +23,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 
 contract TCTCredential is ERC1155, AccessControl, Pausable {
 
@@ -192,13 +192,13 @@ contract TCTCredential is ERC1155, AccessControl, Pausable {
      * Doc5 §V, Doc3 §III.
      */
     function safeTransferFrom(address, address, uint256, uint256, bytes memory)
-        public pure override { revert("TCT: soulbound — transfers disabled"); }
+        public pure override { revert("TCT: soulbound - transfers disabled"); }
 
     function safeBatchTransferFrom(address, address, uint256[] memory, uint256[] memory, bytes memory)
-        public pure override { revert("TCT: soulbound — transfers disabled"); }
+        public pure override { revert("TCT: soulbound - transfers disabled"); }
 
     function setApprovalForAll(address, bool)
-        public pure override { revert("TCT: soulbound — approvals disabled"); }
+        public pure override { revert("TCT: soulbound - approvals disabled"); }
 
     // ─── ERC-4337 / EIP-1271 COMPATIBILITY ────────────────────────────────────
     /**

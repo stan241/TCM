@@ -53,7 +53,6 @@ contract TCTOutcomeRegistry is Initializable, UUPSUpgradeable, AccessControlUpgr
 
     function initialize(address admin) public initializer {
         __AccessControl_init();
-        __UUPSUpgradeable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
