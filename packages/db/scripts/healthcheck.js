@@ -28,13 +28,18 @@ if (fs.existsSync(envPath)) {
   }
 }
 
+// 8 stores across 2 RDS instances (consolidated Jun 2026)
+// Instance 1: identity-vault (PII isolated)
+// Instance 2: 7 schemas on one instance
 const STORES = {
+  'identity-vault':    'DATABASE_URL_IDENTITY_VAULT',
   'credential-mirror': 'DATABASE_URL_CREDENTIAL_MIRROR',
+  'outcome-store':     'DATABASE_URL_OUTCOME_STORE',
   'audit-log':         'DATABASE_URL_AUDIT_LOG',
-  'kyc-workflow':      'DATABASE_URL_KYC_WORKFLOW',
-  'sync-pipeline':     'DATABASE_URL_SYNC_PIPELINE',
+  'chain-registry':    'DATABASE_URL_CHAIN_REGISTRY',
   'commercial':        'DATABASE_URL_COMMERCIAL',
-  'billing':           'DATABASE_URL_BILLING',
+  'kyc-workflow':      'DATABASE_URL_KYC_WORKFLOW',
+  'doc-attestation':   'DATABASE_URL_DOC_ATTESTATION',
 }
 
 async function checkStore(label, connString) {

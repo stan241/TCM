@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { db } from '../../db'
 import { createAuditEvent } from '../../services/audit/auditWriter'
 import { mintAndActivate, getBlockConfirmations, getFinalityState } from '../../services/blockchain/mintService'
+import { emitEngagementEvent, buildEngagementEvent } from '../../services/tca/engagementEvents'
 import { logger } from '../../lib/logger'
 
 export const tokenRouter = Router()
@@ -26,7 +27,8 @@ tokenRouter.post('/mint-and-activate', async (req: Request, res: Response) => {
   try {
     const sessionResult = await db.query(
       `SELECT session_id, gate3_passed, gate4_passed, wallet_address,
-              kyc_case_id, token_id, tx_hash, expires_at
+              kyc_case_id, token_id, tx_hash, expires_at,
+              tca_engagement_id, tca_engagement_status
        FROM onboarding_session WHERE session_id = $1 AND expires_at > now()`,
       [session_id]
     )
@@ -34,6 +36,18 @@ tokenRouter.post('/mint-and-activate', async (req: Request, res: Response) => {
 
     const session = sessionResult.rows[0]
     if (!session.gate3_passed) return res.status(400).json({ error: 'GATE3_NOT_PASSED' })
+
+    // TCA Option B gate: engagement.approved is required before mintAndActivate
+    // tca_engagement_id may be null in dev/test when TCA_WEBHOOK_URL is unset
+    if (session.tca_engagement_id && session.tca_engagement_status !== 'APPROVED') {
+      logger.warn({ session_id, tca_engagement_status: session.tca_engagement_status },
+        'TCA engagement not approved — blocking mint')
+      return res.status(403).json({
+        error:   'TCA_ENGAGEMENT_NOT_APPROVED',
+        message: 'TCA engagement must be in APPROVED state before credential can be minted.',
+        tca_engagement_status: session.tca_engagement_status,
+      })
+    }
 
     // Idempotent — return existing result if already minted
     if (session.gate4_passed && session.token_id) {
@@ -112,6 +126,18 @@ tokenRouter.post('/mint-and-activate', async (req: Request, res: Response) => {
     })
 
     logger.info({ session_id, token_id: mintResult.token_id, action: 'minted' }, 'Credential minted and activated')
+
+    // TCA Option B: fire engagement.approved event (best-effort — non-blocking)
+    if (session.tca_engagement_id) {
+      emitEngagementEvent(
+        buildEngagementEvent('engagement.approved', session.tca_engagement_id, session_id, {
+          token_id:      mintResult.token_id,
+          tx_hash:       mintResult.tx_hash,
+          block_number:  mintResult.block_number,
+          credential_class: '0x0001',
+        })
+      ).catch(err => logger.error({ err }, 'TCA engagement.approved event failed (non-blocking)'))
+    }
 
     return res.status(200).json({
       gate4_passed:   true,
