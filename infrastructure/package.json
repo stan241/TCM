@@ -1,0 +1,22 @@
+{
+  "name": "@tcm/infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build":   "tsc",
+    "watch":   "tsc -w",
+    "deploy":  "cdk deploy --all",
+    "diff":    "cdk diff",
+    "synth":   "cdk synth",
+    "destroy": "cdk destroy --all"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.147.0",
+    "constructs":  "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/node":    "^20.0.0",
+    "aws-cdk":        "^2.147.0",
+    "typescript":     "^5.4.0"
+  }
+}
