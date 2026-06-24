@@ -15,7 +15,7 @@
     "db:migrate": "node packages/db/scripts/migrate.js"
   },
   "overrides": {
-    "next": "15.3.3",
+    "next": "15.5.19",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
@@ -29,5 +29,8 @@
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
+  },
+  "dependencies": {
+    "next": "15.5.19"
   }
 }
