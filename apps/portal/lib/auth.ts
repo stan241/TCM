@@ -9,27 +9,43 @@
 
 import type { NextAuthOptions } from 'next-auth'
 import EmailProvider from 'next-auth/providers/email'
+import CredentialsProvider from 'next-auth/providers/credentials'
 import { Pool } from 'pg'
 
+const DEMO_MODE = process.env.DEMO_MODE === 'true'
+
 // Session storage: PostgreSQL — not JWT cookies for sensitive portal sessions
-const pool = new Pool({ connectionString: process.env.DATABASE_URL_CREDENTIAL_MIRROR })
+const pool = DEMO_MODE ? null : new Pool({ connectionString: process.env.DATABASE_URL_CREDENTIAL_MIRROR })
 
 export const authOptions: NextAuthOptions = {
   providers: [
-    // Email + OTP (magic link / one-time passcode) — Doc10 §V
-    EmailProvider({
-      server: {
-        host:   process.env.EMAIL_SERVER_HOST,
-        port:   Number(process.env.EMAIL_SERVER_PORT ?? 587),
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
+    // Demo mode: accept any email — no email server or DB required
+    ...(DEMO_MODE ? [
+      CredentialsProvider({
+        name: 'Demo Login',
+        credentials: {
+          email: { label: 'Email', type: 'email', placeholder: 'demo@example.com' },
         },
-      },
-      from: process.env.EMAIL_FROM ?? 'noreply@tokencap.io',
-      // Short expiry — onboarding sessions are sensitive
-      maxAge: 10 * 60, // 10 minutes for the OTP link
-    }),
+        async authorize(credentials) {
+          if (!credentials?.email) return null
+          return { id: 'demo-user', email: credentials.email, name: 'Demo User' }
+        },
+      }),
+    ] : [
+      // Email + OTP (magic link / one-time passcode) — Doc10 §V
+      EmailProvider({
+        server: {
+          host:   process.env.EMAIL_SERVER_HOST,
+          port:   Number(process.env.EMAIL_SERVER_PORT ?? 587),
+          auth: {
+            user: process.env.EMAIL_SERVER_USER,
+            pass: process.env.EMAIL_SERVER_PASSWORD,
+          },
+        },
+        from: process.env.EMAIL_FROM ?? 'noreply@tokencap.io',
+        maxAge: 10 * 60,
+      }),
+    ]),
   ],
 
   session: {
@@ -39,8 +55,7 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, user }) {
-      // On first sign-in, attach the session_id if one exists for this email
-      if (user?.email) {
+      if (user?.email && pool) {
         const result = await pool.query<{ session_id: string }>(
           `SELECT session_id FROM onboarding_session
            WHERE participant_email = $1 AND expires_at > now()
