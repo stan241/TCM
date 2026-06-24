@@ -7,6 +7,7 @@ import { walletRouter }        from './routes/wallet/index.js'
 import { tokenRouter }         from './routes/token/index.js'
 import { credentialsRouter }      from './routes/credentials/index.js'
 import { adminRouter, auditRouter, credentialSearchRouter } from './routes/admin/index.js'
+import { tcaWebhookRouter } from './routes/tca/webhook.js'
 import { mtlsMiddleware }           from './middleware/mtls.js'
 import { requestLogger }            from './middleware/logger.js'
 import { startReconciliationJobs }  from './jobs/reconciliation.js'
@@ -29,6 +30,9 @@ app.use('/api/v1/credentials', credentialSearchRouter)
 app.use('/api/v1/credentials', credentialsRouter)
 app.use('/api/v1/admin',       adminRouter)
 app.use('/api/v1/audit',       auditRouter)
+
+// TCA Onboarding Engine — inbound webhook (Option B)
+app.use('/api/v1/tca/webhook', tcaWebhookRouter)
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))

@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { db } from '../../db'
 import { sdnCheck } from '../../services/kyc/sdnCheck'
 import { createAuditEvent } from '../../services/audit/auditWriter'
+import { emitEngagementEvent, buildEngagementEvent } from '../../services/tca/engagementEvents'
+import { createTcaEngagement } from '../../services/tca/engagementClient'
 import { logger } from '../../lib/logger'
 
 export const onboardingRouter = Router()
@@ -70,14 +72,49 @@ onboardingRouter.post('/initiate', async (req: Request, res: Response) => {
 
     const session_id = result.rows[0]!.session_id
 
-    // ── Step 3: Audit the session creation ───────────────────────────────────
+    // ── Step 3: Create TCA engagement (Option B Gate 1) ──────────────────────
+    // Best-effort — failure does not block session creation.
+    // tca_engagement_id stored on session; used as hard gate at Gate 4.
+    let tca_engagement_id: string | null = null
+    if (process.env.TCA_API_URL) {
+      try {
+        const engagement = await createTcaEngagement({
+          entity_type:      'TCM',
+          entity_version:   '1.0',
+          credential_class: '0x0001',
+          session_id,
+          participant_email: email,
+          jurisdiction,
+        })
+        tca_engagement_id = engagement.engagement_id
+
+        await db.query(
+          `UPDATE onboarding_session
+           SET tca_engagement_id = $1, tca_engagement_status = 'DRAFT', updated_at = now()
+           WHERE session_id = $2`,
+          [tca_engagement_id, session_id]
+        )
+
+        emitEngagementEvent(
+          buildEngagementEvent('engagement.created', tca_engagement_id, session_id, {
+            jurisdiction, credential_class: '0x0001',
+          })
+        ).catch(err => logger.error({ err }, 'TCA engagement.created event failed (non-blocking)'))
+
+        logger.info({ session_id, tca_engagement_id }, 'TCA engagement created')
+      } catch (err) {
+        logger.error({ err, session_id }, 'TCA engagement creation failed — continuing without TCA (best-effort)')
+      }
+    }
+
+    // ── Step 4: Audit the session creation ───────────────────────────────────
     await createAuditEvent({
       actor_type:  'HUMAN',
       actor_id:    email,
       action:      'onboarding.session_created',
       object_type: 'OnboardingSession',
       object_id:   session_id,
-      metadata:    { jurisdiction, sdn_checked: true, sdn_blocked: false },
+      metadata:    { jurisdiction, sdn_checked: true, sdn_blocked: false, tca_engagement_id },
     })
 
     logger.info({ session_id, action: 'session_created' }, 'Onboarding session initiated')
@@ -87,6 +124,7 @@ onboardingRouter.post('/initiate', async (req: Request, res: Response) => {
       current_gate:    1,
       pre_gate_passed: true,
       expires_at:      expiresAt.toISOString(),
+      tca_engagement_id: tca_engagement_id ?? undefined,
       // Purchase price display (Doc10 §III Gate 1)
       purchase: {
         sku:          'TCT-0x0001-v1',
