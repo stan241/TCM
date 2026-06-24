@@ -20,7 +20,9 @@ import { injected, walletConnect } from 'wagmi/connectors'
 import { GateProgress } from '@/components/gates/GateProgress'
 import { wallet as walletApi, ApiError } from '@/lib/apiClient'
 import { buildSigningChallenge } from '@/lib/wagmi'
-import { randomBytes } from 'crypto'
+
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+const DEMO_WALLET = '0xDEMO000000000000000000000000000000000001'
 
 type Step = 'CONNECT' | 'SIGN' | 'BINDING' | 'DONE' | 'ERROR'
 
@@ -103,21 +105,48 @@ export default function Gate3WalletPage() {
               <strong>What does signing mean?</strong> You will sign a one-time challenge to prove
               ownership of this wallet. Your private key never leaves your device.
             </div>
-            <button
-              onClick={() => connect({ connector: injected() })}
-              className="w-full border-2 border-tcm-blue text-tcm-blue rounded-lg py-3 text-sm font-semibold hover:bg-blue-50 flex items-center justify-center gap-2"
-            >
-              🦊 Connect MetaMask
-            </button>
-            <button
-              onClick={() => connect({ connector: walletConnect({
-                projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '',
-                showQrModal: true,
-              } as any) })}
-              className="w-full border rounded-lg py-3 text-sm font-medium hover:bg-gray-50 flex items-center justify-center gap-2"
-            >
-              📱 WalletConnect (mobile)
-            </button>
+
+            {DEMO_MODE && (
+              <button
+                onClick={async () => {
+                  setStep('BINDING')
+                  const res = await walletApi.bind({
+                    session_id:     sessionId!,
+                    wallet_address: DEMO_WALLET,
+                    signature:      'demo-signature',
+                    message:        'demo',
+                  })
+                  if (res.gate3_passed) {
+                    sessionStorage.setItem('tcm_identity_binding', res.identity_binding)
+                    setStep('DONE')
+                    setTimeout(() => router.push('/onboarding/gate-4'), 1200)
+                  }
+                }}
+                className="w-full bg-tcm-blue text-white rounded-lg py-3 text-sm font-semibold hover:opacity-90 flex items-center justify-center gap-2"
+              >
+                🔐 Use demo wallet (simulated)
+              </button>
+            )}
+
+            {!DEMO_MODE && (
+              <>
+                <button
+                  onClick={() => connect({ connector: injected() })}
+                  className="w-full border-2 border-tcm-blue text-tcm-blue rounded-lg py-3 text-sm font-semibold hover:bg-blue-50 flex items-center justify-center gap-2"
+                >
+                  🦊 Connect MetaMask
+                </button>
+                <button
+                  onClick={() => connect({ connector: walletConnect({
+                    projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '',
+                    showQrModal: true,
+                  } as any) })}
+                  className="w-full border rounded-lg py-3 text-sm font-medium hover:bg-gray-50 flex items-center justify-center gap-2"
+                >
+                  📱 WalletConnect (mobile)
+                </button>
+              </>
+            )}
           </div>
         )}
 

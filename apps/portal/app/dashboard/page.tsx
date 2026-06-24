@@ -9,6 +9,9 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { credentials as credApi } from '@/lib/apiClient'
+import { DEMO_ACTIVITY } from '@/lib/demo'
+
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -18,11 +21,19 @@ export default function DashboardPage() {
   const [loading,    setLoading]    = useState(true)
 
   useEffect(() => {
-    if (status === 'unauthenticated') { router.replace('/auth/signin'); return }
-    if (status !== 'authenticated') return
+    if (!DEMO_MODE && status === 'unauthenticated') { router.replace('/auth/signin'); return }
+    if (!DEMO_MODE && status !== 'authenticated') return
 
-    const tokenId = sessionStorage.getItem('tcm_token_id')
+    const tokenId = sessionStorage.getItem('tcm_token_id') ?? (DEMO_MODE ? 'demo-token-0001' : null)
     if (!tokenId) { setLoading(false); return }
+
+    if (DEMO_MODE) {
+      credApi.get(tokenId)
+        .then(cred => { setCredential(cred); setActivity(DEMO_ACTIVITY) })
+        .catch(console.error)
+        .finally(() => setLoading(false))
+      return
+    }
 
     Promise.all([
       credApi.get(tokenId),

@@ -5,11 +5,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { DEMO_MODE } from '@/lib/demo'
 
 const stripe   = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', { apiVersion: '2024-06-20' })
 const API_BASE = process.env.INTERNAL_API_URL ?? 'http://localhost:4000'
 
 export async function POST(req: NextRequest) {
+  if (DEMO_MODE) {
+    return NextResponse.json({ gate1_passed: true, order_id: 'demo-order-001', invoice_number: 'INV-DEMO-001' })
+  }
   try {
     const { session_id, payment_intent_id } = await req.json()
     if (!session_id || !payment_intent_id) {

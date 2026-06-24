@@ -6,11 +6,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { DEMO_MODE } from '@/lib/demo'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', { apiVersion: '2024-06-20' })
 const API_BASE = process.env.INTERNAL_API_URL ?? 'http://localhost:4000'
 
 export async function POST(req: NextRequest) {
+  if (DEMO_MODE) {
+    return NextResponse.json({ client_secret: null, amount_cents: 50000 })
+  }
   try {
     const { session_id } = await req.json()
     if (!session_id) {

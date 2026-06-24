@@ -20,6 +20,8 @@ import { kyc, ApiError } from '@/lib/apiClient'
 import { GateProgress } from '@/components/gates/GateProgress'
 import { PERSONA_POLL_INTERVAL_MS } from '@/lib/persona'
 
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+
 type KYCStatus = 'IDLE' | 'INITIATING' | 'IN_PROGRESS' | 'VERIFIED' | 'FAILED' | 'RESTRICTED'
 
 export default function Gate2KYCPage() {
@@ -100,8 +102,13 @@ export default function Gate2KYCPage() {
           </div>
         )}
 
-        {/* Persona Embedded Flow — mounts when case_id is available */}
-        {status === 'IN_PROGRESS' && caseId && (
+        {/* Demo mode: skip Persona SDK, show simulated verification UI */}
+        {status === 'IN_PROGRESS' && caseId && DEMO_MODE && (
+          <DemoKycFlow onComplete={pollStatus} />
+        )}
+
+        {/* Persona Embedded Flow — mounts when case_id is available (live mode only) */}
+        {status === 'IN_PROGRESS' && caseId && !DEMO_MODE && (
           <PersonaEmbeddedFlow
             caseId={caseId}
             onComplete={() => pollStatus()}
@@ -120,6 +127,58 @@ export default function Gate2KYCPage() {
         </p>
       </div>
     </main>
+  )
+}
+
+// ── Demo KYC Flow ─────────────────────────────────────────────────────────────
+function DemoKycFlow({ onComplete }: { onComplete: () => void }) {
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    const steps = [
+      { delay: 800,  pct: 20, label: 'Scanning document…' },
+      { delay: 1800, pct: 50, label: 'Verifying identity…' },
+      { delay: 2800, pct: 80, label: 'Cross-referencing records…' },
+      { delay: 3600, pct: 100, label: 'Verification complete' },
+    ]
+    const timers = steps.map(s => setTimeout(() => {
+      setProgress(s.pct)
+      if (s.pct === 100) setTimeout(onComplete, 400)
+    }, s.delay))
+    return () => timers.forEach(clearTimeout)
+  }, [onComplete])
+
+  return (
+    <div className="border-2 border-blue-200 rounded-xl p-6 bg-blue-50 space-y-4">
+      <div className="flex items-center gap-3 text-sm text-blue-800">
+        <div className="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center text-xl">🪪</div>
+        <div>
+          <p className="font-semibold">Simulated Identity Verification</p>
+          <p className="text-xs text-blue-600 mt-0.5">Demo mode — no real document required</p>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-xs text-blue-700">
+          <span>{progress < 100 ? 'Verifying…' : 'Complete'}</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="w-full bg-blue-200 rounded-full h-2">
+          <div
+            className="h-2 rounded-full bg-blue-600 transition-all duration-700"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+      {progress < 100 && (
+        <div className="grid grid-cols-3 gap-2 text-xs text-blue-600">
+          {['Scan document', 'Verify identity', 'Clear records'].map((step, i) => (
+            <div key={i} className={`text-center p-2 rounded border ${progress > i * 33 ? 'bg-blue-200 border-blue-300 font-medium' : 'border-blue-200'}`}>
+              {step}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
