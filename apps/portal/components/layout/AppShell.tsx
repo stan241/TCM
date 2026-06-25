@@ -4,6 +4,17 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 
+function UserBadge({ email }: { email: string }) {
+  return (
+    <div className="hidden md:flex items-center gap-2">
+      <div className="w-7 h-7 rounded-full bg-[#1A3A5C]/10 flex items-center justify-center">
+        <span className="text-[#1A3A5C] text-xs font-bold">{email[0].toUpperCase()}</span>
+      </div>
+      <span className="text-xs text-slate-500 font-medium">{email}</span>
+    </div>
+  )
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
   const pathname = usePathname()
@@ -37,14 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-4">
             {session?.user?.email && (
-              <div className="hidden md:flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-[#1A3A5C]/10 flex items-center justify-center">
-                  <span className="text-[#1A3A5C] text-xs font-bold">
-                    {session.user.email![0].toUpperCase()}
-                  </span>
-                </div>
-                <span className="text-xs text-slate-500 font-medium">{session.user.email}</span>
-              </div>
+              <UserBadge email={session.user.email} />
             )}
             <button
               onClick={() => signOut({ callbackUrl: '/' })}
