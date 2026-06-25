@@ -34,21 +34,24 @@ export function getWagmiConfig() {
     process.env.NEXT_PUBLIC_NETWORK === 'amoy'        ? polygonAmoy :
     polygonMumbai
 
+  const connectors = [
+    injected({ target: 'metaMask' }),
+    // WalletConnect requires a project ID — skip in demo or when not configured
+    ...(WC_PROJECT_ID ? [walletConnect({
+      projectId: WC_PROJECT_ID,
+      metadata: {
+        name:        'TokenCap Token Portal',
+        description: 'Credential issuance portal — TokenCap Miner',
+        url:         process.env.NEXTAUTH_URL ?? 'https://portal.tokencap.io',
+        icons:       [],
+      },
+      showQrModal: true,
+    })] : []),
+  ]
+
   _wagmiConfig = createConfig({
     chains: [chain] as [Chain],
-    connectors: [
-      injected({ target: 'metaMask' }),
-      walletConnect({
-        projectId: WC_PROJECT_ID,
-        metadata: {
-          name:        'TokenCap Token Portal',
-          description: 'Credential issuance portal — TokenCap Miner',
-          url:         process.env.NEXTAUTH_URL ?? 'https://portal.tokencap.io',
-          icons:       [],
-        },
-        showQrModal: true,
-      }),
-    ],
+    connectors,
     transports: {
       [polygon.id]:       http(process.env.NEXT_PUBLIC_RPC_POLYGON  ?? ''),
       [polygonAmoy.id]:   http(process.env.NEXT_PUBLIC_RPC_AMOY     ?? ''),
