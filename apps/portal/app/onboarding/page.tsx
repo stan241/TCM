@@ -1,24 +1,10 @@
-'use client'
-
-/**
- * Pre-gate: intake form + purchase confirmation + pre-purchase SDN check
- *
- * Doc10 §III:
- * - Creates onboarding session via POST /api/v1/onboarding/initiate
- * - Pre-purchase SDN/sanctions check fires server-side before this resolves
- * - Buyer blocked BEFORE payment collected if SDN hit (non-waivable)
- * - No credential-class selection — single class 0x0001 in v1
- * - Progressive form. Auto-save state. Resume on re-visit.
- *
- * Regulatory copy rules (Doc10 §IV):
- * - No language describing TCT as investment, asset, financial instrument
- * - Disclaimer visible on all screens
- */
+﻿'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onboarding, ApiError } from '@/lib/apiClient'
 import { GateProgress } from '@/components/gates/GateProgress'
+import Link from 'next/link'
 
 export default function PreGatePage() {
   const router = useRouter()
@@ -30,25 +16,16 @@ export default function PreGatePage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
     try {
       const res = await onboarding.initiate(fields)
-      // Persist session_id in sessionStorage for gate progression
-      // (no sensitive data — session_id is a non-sensitive UUID)
       sessionStorage.setItem('tcm_session_id', res.session_id)
       sessionStorage.setItem('tcm_purchase',   JSON.stringify(res.purchase))
       router.push('/onboarding/gate-1')
-
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 403) {
-          // SDN block — generic message, do not reveal details (Doc2 §II)
-          setError('We are unable to process this application. Please contact support if you believe this is an error.')
-        } else if (err.status === 400) {
-          setError('Please check your information and try again.')
-        } else {
-          setError('Something went wrong. Please try again in a moment.')
-        }
+        if (err.status === 403) setError('We are unable to process this application. Please contact support if you believe this is an error.')
+        else if (err.status === 400) setError('Please check your information and try again.')
+        else setError('Something went wrong. Please try again in a moment.')
       } else {
         setError('Connection error. Please check your internet and try again.')
       }
@@ -61,117 +38,100 @@ export default function PreGatePage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-tcm-light-grey">
-      <div className="max-w-lg w-full bg-white rounded-xl shadow-md p-8 space-y-6">
+    <OnboardingShell>
+      <GateProgress currentGate={0} />
+
+      <div className="mt-8 mb-6">
+        <h1 className="text-2xl font-bold text-[#0C1B2E] mb-1">Apply for your credential</h1>
+        <p className="text-sm text-slate-500">Provide your details below. A sanctions check will be performed before payment is collected.</p>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700 mb-5">
+          <strong className="font-semibold">Unable to proceed</strong> — {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <h1 className="text-2xl font-bold text-tcm-blue">Get your TokenCap Token</h1>
-          <p className="text-sm text-tcm-grey mt-1">
-            Complete the steps below to receive your credential and access the network.
-          </p>
+          <label htmlFor="legal_name" className="label">Legal name</label>
+          <input id="legal_name" name="legal_name" type="text" placeholder="As it appears on your government-issued ID" value={fields.legal_name} onChange={handleChange} required className="input-field" />
+        </div>
+        <div>
+          <label htmlFor="email" className="label">Email address</label>
+          <input id="email" name="email" type="email" placeholder="you@example.com" value={fields.email} onChange={handleChange} required className="input-field" />
+        </div>
+        <div>
+          <label htmlFor="jurisdiction" className="label">Country / Jurisdiction</label>
+          <select id="jurisdiction" name="jurisdiction" value={fields.jurisdiction} onChange={handleChange} required className="input-field bg-white">
+            <option value="">Select your country</option>
+            <option value="US">United States</option>
+            <option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option>
+            <option value="AU">Australia</option>
+            <option value="SG">Singapore</option>
+            <option value="OTHER">Other</option>
+          </select>
         </div>
 
-        <GateProgress currentGate={0} />
-
-        {error && (
-          <div className="rounded bg-red-50 border border-red-200 text-red-700 text-sm p-4">
-            {error}
+        <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 space-y-3">
+          <div className="flex justify-between text-sm font-semibold text-[#0C1B2E]">
+            <span>TokenCap Token credential</span>
+            <span>$500.00 USD</span>
           </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField
-            label="Legal name"
-            name="legal_name"
-            type="text"
-            placeholder="As it appears on your government-issued ID"
-            value={fields.legal_name}
-            onChange={handleChange}
-            required
-          />
-          <FormField
-            label="Email address"
-            name="email"
-            type="email"
-            placeholder="you@example.com"
-            value={fields.email}
-            onChange={handleChange}
-            required
-          />
-          <div>
-            <label className="block text-sm font-medium mb-1">Country / Jurisdiction</label>
-            <select
-              name="jurisdiction"
-              value={fields.jurisdiction}
-              onChange={handleChange}
-              required
-              className="w-full border rounded px-3 py-2 text-sm bg-white"
-            >
-              <option value="">Select your country</option>
-              <option value="US">United States</option>
-              <option value="GB">United Kingdom</option>
-              <option value="CA">Canada</option>
-              <option value="AU">Australia</option>
-              <option value="SG">Singapore</option>
-              <option value="OTHER">Other</option>
-            </select>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            A one-time credential purchase. Payment is collected only after successful sanctions screening.
+            Purchasing gives you TCT Owner status and qualifies you for network participation upon activation.
+          </p>
+          <div className="border-t border-slate-200 pt-3 flex items-center gap-2 text-xs text-[#1A3A5C] font-semibold">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            TokenCap Token is a credential, not a financial instrument.
           </div>
+        </div>
 
-          {/* Purchase price display — exact copy from Doc10 §III Gate 1 */}
-          <div className="rounded bg-tcm-light-grey border p-4 text-sm space-y-2">
-            <div className="flex justify-between font-semibold">
-              <span>TokenCap Token credential</span>
-              <span>$500.00</span>
-            </div>
-            <p className="text-xs text-tcm-grey leading-relaxed">
-              You are purchasing a TokenCap Token credential. Purchasing gives you TCT Owner status.
-              Activating your credential (after identity verification) qualifies you for network
-              participation.
-            </p>
-            {/* Regulatory disclaimer — always visible (Doc10 §IV) */}
-            <p className="text-xs font-medium text-tcm-blue border-t pt-2">
-              TokenCap Token is a credential, not a financial instrument.
-            </p>
-          </div>
+        <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-4 text-base">
+          {loading
+            ? <span className="flex items-center gap-2"><Spinner />Checking eligibility...</span>
+            : 'Continue to Purchase →'}
+        </button>
+      </form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-tcm-blue text-white rounded py-2.5 text-sm font-semibold
-                       hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-          >
-            {loading ? 'Checking eligibility…' : 'Continue to purchase →'}
-          </button>
-        </form>
-
-        <p className="text-xs text-center text-tcm-grey">
-          Already started?{' '}
-          <a href="/auth/signin" className="underline">Resume your application</a>
-        </p>
-      </div>
-    </main>
+      <p className="text-xs text-center text-slate-400 mt-6">
+        Already started?{' '}
+        <Link href="/auth/signin" className="text-[#1A3A5C] font-semibold hover:underline">Resume your application</Link>
+      </p>
+    </OnboardingShell>
   )
 }
 
-function FormField({
-  label, name, type, placeholder, value, onChange, required,
-}: {
-  label: string; name: string; type: string; placeholder: string
-  value: string; onChange: React.ChangeEventHandler<HTMLInputElement>; required: boolean
-}) {
+export function OnboardingShell({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
   return (
-    <div>
-      <label htmlFor={name} className="block text-sm font-medium mb-1">{label}</label>
-      <input
-        id={name}
-        name={name}
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
-        required={required}
-        className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tcm-blue"
-        aria-label={label}
-      />
+    <div className="min-h-screen bg-[#F5F7FA]">
+      <div className="bg-[#0C1B2E] text-white/40 text-[11px] text-center py-2 font-medium">
+        TokenCap Token is a credential, not a financial instrument.
+      </div>
+      <nav className="bg-white border-b border-slate-200 px-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between" style={{height:'60px'}}>
+          <Link href="/" className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-[#1A3A5C] rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-xs">TC</span>
+            </div>
+            <span className="font-bold text-[#1A3A5C] text-base">TokenCap Network</span>
+          </Link>
+          <Link href="/auth/signin" className="text-sm text-slate-500 hover:text-[#1A3A5C] font-medium transition-colors">
+            Sign In
+          </Link>
+        </div>
+      </nav>
+      <div className="max-w-7xl mx-auto px-6 py-10">
+        <div className={`${wide ? 'max-w-2xl' : 'max-w-xl'} mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-8`}>
+          {children}
+        </div>
+      </div>
     </div>
   )
+}
+
+function Spinner() {
+  return <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
 }
