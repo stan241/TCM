@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="hidden md:flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full bg-[#1A3A5C]/10 flex items-center justify-center">
                   <span className="text-[#1A3A5C] text-xs font-bold">
-                    {session.user.email[0].toUpperCase()}
+                    {session.user.email![0].toUpperCase()}
                   </span>
                 </div>
                 <span className="text-xs text-slate-500 font-medium">{session.user.email}</span>
